@@ -5,13 +5,15 @@ import android.media.AudioManager
 import android.os.Build
 import android.view.LayoutInflater
 import android.view.ViewGroup
-import android.widget.SeekBar
 import androidx.annotation.MainThread
 import androidx.preference.PreferenceManager
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.slider.RangeSlider
 import com.klee.volumelockr.databinding.VolumeCardBinding
 import com.klee.volumelockr.service.VolumeService
 import com.klee.volumelockr.ui.SettingsFragment
+import kotlin.math.max;
+import kotlin.math.min;
 
 class VolumeAdapter(
     private var mVolumeList: List<Volume>,
@@ -44,14 +46,26 @@ class VolumeAdapter(
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val volume = mVolumeList[position]
         holder.binding.mediaTextView.text = volume.name
-        holder.binding.seekBar.progress = volume.value
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            holder.binding.seekBar.min = volume.min
+        val fractional_volume = volume.value.toFloat() / volume.max.toFloat()
+
+        // Change bar state only if the whole thing is selected or the range is pinched to a point
+
+        if((holder.binding.seekBar.values[0] == 0.0f && holder.binding.seekBar.values[1] == 1.0f) ||
+           (holder.binding.seekBar.values[0] == holder.binding.seekBar.values[1])) {
+
+            holder.binding.seekBar.setValues(fractional_volume, fractional_volume)
+
         }
-        holder.binding.seekBar.max = volume.max
+
+        var volumeFrom = volume.copy()
+        volumeFrom.value = (volume.max * holder.binding.seekBar.values[0]).toInt()
+
+
+        var volumeTo = volume.copy()
+        volumeTo.value = (volume.max * holder.binding.seekBar.values[1]).toInt()
 
         registerSeekBarCallback(holder, volume)
-        registerSwitchButtonCallback(holder, volume)
+        registerSwitchButtonCallback(holder, volumeFrom, volumeTo)
 
         loadLockFromService(holder, volume)
 
@@ -64,30 +78,30 @@ class VolumeAdapter(
     }
 
     private fun registerSeekBarCallback(holder: ViewHolder, volume: Volume) {
-        val listener = object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(view: SeekBar?, progress: Int, fromUser: Boolean) {
+        val listener =
+            RangeSlider.OnChangeListener { slider, value, fromUser ->
+
+                // Compute minimum, maximum and update volume
+
+                val volume_from = (slider.values[0] * volume.max).toInt()
+                val volume_to = (slider.values[1] * volume.max).toInt()
+                val updated_volume = min(volume_to, max(volume_from, volume.value))
+
                 if (volume.stream != AudioManager.STREAM_NOTIFICATION || mService?.getMode() == 2) {
-                    mAudioManager.setStreamVolume(volume.stream, progress, 0)
+                    mAudioManager.setStreamVolume(volume.stream, updated_volume, 0)
                 }
 
-                volume.value = progress
+                volume.value = updated_volume
             }
-
-            override fun onStartTrackingTouch(view: SeekBar?) {
-            }
-
-            override fun onStopTrackingTouch(view: SeekBar?) {
-            }
-        }
-        holder.binding.seekBar.setOnSeekBarChangeListener(listener)
+        holder.binding.seekBar.addOnChangeListener(listener)
     }
 
-    private fun registerSwitchButtonCallback(holder: ViewHolder, volume: Volume) {
+    private fun registerSwitchButtonCallback(holder: ViewHolder, volumeFrom: Volume, volumeTo: Volume) {
         holder.binding.switchButton.setOnCheckedChangeListener { _, isChecked ->
             if (isChecked) {
-                onVolumeLocked(holder, volume)
+                onVolumeLocked(holder, volumeFrom, volumeTo)
             } else {
-                onVolumeUnlocked(holder, volume)
+                onVolumeUnlocked(holder, volumeFrom)
             }
         }
     }
@@ -134,9 +148,9 @@ class VolumeAdapter(
         }
     }
 
-    private fun onVolumeLocked(holder: ViewHolder, volume: Volume) {
+    private fun onVolumeLocked(holder: ViewHolder, volumeFrom: Volume, volumeTo: Volume) {
         mService?.let {
-            it.addLock(volume.stream, volume.value)
+            it.addLock(volumeFrom.stream, volumeFrom.value, volumeTo.value)
             adjustService()
             adjustNotification()
             holder.binding.seekBar.isEnabled = false

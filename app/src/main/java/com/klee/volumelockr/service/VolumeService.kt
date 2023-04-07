@@ -27,6 +27,8 @@ import com.klee.volumelockr.ui.MainActivity
 import java.util.Timer
 import java.util.TimerTask
 import kotlin.collections.HashMap
+import kotlin.math.max;
+import kotlin.math.min;
 
 class VolumeService : Service() {
 
@@ -59,7 +61,7 @@ class VolumeService : Service() {
     private var mVolumeListener: (() -> Unit)? = null
     private var mModeListener: (() -> Unit)? = null
     private val mBinder = LocalBinder()
-    private var mVolumeLock = HashMap<Int, Int>()
+    private var mVolumeLock = HashMap<Int, Pair<Int, Int>>()
     private var mMode: Int = 2
     private var mTimer: Timer? = null
 
@@ -125,8 +127,8 @@ class VolumeService : Service() {
     }
 
     @Synchronized
-    fun addLock(stream: Int, volume: Int) {
-        mVolumeLock[stream] = volume
+    fun addLock(stream: Int, volumeFrom: Int, volumeTo: Int) {
+        mVolumeLock[stream] = Pair(volumeFrom, volumeTo)
         savePreferences()
     }
 
@@ -137,7 +139,7 @@ class VolumeService : Service() {
     }
 
     @Synchronized
-    fun getLocks(): HashMap<Int, Int> {
+    fun getLocks(): HashMap<Int, Pair<Int, Int>> {
         return mVolumeLock
     }
 
@@ -166,8 +168,9 @@ class VolumeService : Service() {
     @Synchronized
     private fun checkVolumes() {
         for ((stream, volume) in mVolumeLock) {
-            if (mAudioManager.getStreamVolume(stream) != volume) {
-                mAudioManager.setStreamVolume(stream, volume, 0)
+            val updatedVolume = min(max(mAudioManager.getStreamVolume(stream), volume.first), volume.second)
+            if (mAudioManager.getStreamVolume(stream) != updatedVolume) {
+                mAudioManager.setStreamVolume(stream, updatedVolume, 0)
                 invokeVolumeListenerCallback()
             }
         }

@@ -4,7 +4,8 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="vertical">
+    android:orientation="vertical"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <androidx.cardview.widget.CardView
         android:layout_width="match_parent"
@@ -31,11 +32,14 @@
                 android:textSize="20sp"
                 android:textStyle="bold"/>
 
-            <SeekBar
+            <com.google.android.material.slider.RangeSlider
                 android:id="@+id/seek_bar"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_gravity="center"/>
+                android:layout_gravity="center"
+                android:valueFrom="0.0"
+                android:valueTo="1.0"
+                app:values="@array/initial_range_slider_values" />
 
             <androidx.appcompat.widget.SwitchCompat
                 android:id="@+id/switchButton"
